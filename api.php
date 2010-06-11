@@ -1,7 +1,7 @@
 <?php
 
-include 'libwolk.php';
+include 'lib/libwolk/libwolk.php';
 
-include 'config.php';
+include 'conf/db.php';
 
 wolk_api_main($_SERVER['REQUEST_METHOD']);

@@ -67,15 +67,129 @@ function wolk_api_origin()
 	return (int) $origin_id;
 }
 
-function wolk_user_id($api_key)
+function wolk_user_id_by_api_key($api_key)
 {
 	global $db;
 	
-	$stmt = $db->prepare("SELECT id FROM users WHERE api_key = :api_key");
+	$stmt = $db->prepare("
+		SELECT
+			u.id
+		FROM
+			api_keys as a
+		RIGHT JOIN users as u ON
+			u.id = a.user_id
+		WHERE
+			a.api_key = :api_key
+			AND a.revoked_on IS NULL");
+	
 	$stmt->bindParam(':api_key', $api_key, PDO::PARAM_STR);
+	
 	return $stmt->execute()
 		? $stmt->fetchColumn()
 		: false;
+}
+
+function wolk_user_id_by_openid($openid_identifier)
+{
+	global $db;
+	
+	$stmt = $db->prepare("SELECT id FROM users WHERE openid = :openid");
+	$stmt->bindParam(':openid', $openid_identifier);
+	$stmt->execute();
+	if($id = $stmt->fetchColumn())
+		return $id;
+	
+	$stmt = $db->prepare("INSERT INTO users (openid, added_on) VALUES(:openid, NOW())");
+	$stmt->bindParam(':openid', $openid_identifier);
+	return $stmt->execute()
+		? $db->lastInsertId()
+		: false;
+}
+
+function wolk_user_openid($user_id)
+{
+	global $db;
+	
+	$stmt = $db->prepare("
+		SELECT
+			openid
+		FROM
+			users
+		WHERE
+			id = :user_id");
+	
+	$stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+	
+	return $stmt->execute()
+		? $stmt->fetchColumn()
+		: false;
+}
+
+function wolk_list_api_keys($user_id)
+{
+	global $db;
+	
+	$stmt = $db->prepare("SELECT api_key, added_on, revoked_on FROM api_keys WHERE user_id = :user_id ORDER BY added_on ASC");
+	$stmt->bindParam(':user_id', $user_id);
+	$stmt->execute();
+	
+	return array_map(array('Wolk_ApiKey', 'fetch'), $stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+function wolk_generate_api_key($user_id)
+{
+	global $db;
+	
+	$api_key = Wolk_ApiKey::generate();
+	$stmt = $db->prepare("INSERT INTO api_keys (user_id, api_key, added_on) VALUES(:user_id, :api_key, :added_on)");
+	$stmt->bindParam(':user_id', $user_id);
+	$stmt->bindParam(':api_key', $api_key->key);
+	$stmt->bindValue(':added_on', $api_key->added_on->format('Y-m-d H:i:s'));
+	$stmt->execute();
+	return $api_key;
+}
+
+function wolk_revoke_api_key($api_key)
+{
+	global $db;
+	
+	$stmt = $db->prepare("UPDATE api_keys SET revoked_on = NOW() WHERE api_key = :api_key");
+	$stmt->bindParam(':api_key', $api_key);
+	$stmt->execute();
+	return $stmt->rowCount();
+}
+
+class Wolk_ApiKey
+{
+	static public function generate()
+	{
+		$key = new self();
+		$key->key = md5(uniqid());
+		$key->added_on = new DateTime();
+		return $key;
+	}
+	
+	static public function fetch(array $data)
+	{
+		$key = new self();
+		$key->key = $data['api_key'];
+		$key->added_on = new DateTime($data['added_on']);
+		$key->revoked_on = $data['revoked_on']
+			? new DateTime($data['revoked_on'])
+			: null;
+		return $key;
+	}
+	
+	public $key;
+	
+	public $added_on;
+	
+	public $revoked_on;
+	
+	public function is_valid()
+	{
+		return $this->revoked_on === null;
+	}
 }
 
 function wolk_api_user()
