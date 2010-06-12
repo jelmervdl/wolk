@@ -10,13 +10,24 @@ session_start();
 
 $self = 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME'];
 
+$pages = array(
+	'keys' => 'Keys',
+	'data' => 'Data',
+	'account' => 'Account'
+);
+
+$current_page = isset($_GET['page']) && isset($pages[$_GET['page']])
+	? $_GET['page']
+	: 'keys';
+
 function index_api_login($openid_identifier)
 {
 	global $self;
 	
 	$_SESSION['user_id'] = wolk_user_id_by_openid($openid_identifier);
 	header('Location: ' . $self . '?message=' . urlencode('You have been logged in'));
-	return;
+	ob_end_clean();
+	exit;
 }
 
 function index_api_logout($message = 'You have been logged out')
@@ -25,7 +36,8 @@ function index_api_logout($message = 'You have been logged out')
 	
 	unset($_SESSION['user_id']);
 	header('Location: ' . $self . '?message=' . urlencode($message));
-	return;
+	ob_end_clean();
+	exit;
 }
 
 function index_login_status()
@@ -60,8 +72,9 @@ function index_login()
 		$openid->identity = $_POST['openid_identifier'];
 		header('HTTP/1.1 307 Temporary Redirect');
 		header('Location: ' . $openid->authUrl());
+		ob_end_clean();
 		printf('Redirecting to <a href="%s">%1$s</a>…', $openid->authUrl());
-		return;
+		exit;
 	}
 	
 	echo '
@@ -119,15 +132,12 @@ function index_api_keys()
 
 function index_navigation()
 {
-	global $self;
+	global $self, $pages, $current_page;
 	
-	echo '
-	<ul>
-		<li><a href="'.$self.'?page=account">Account</a></li>
-		<li><a href="'.$self.'?page=data">Data</a></li>
-		<li><a href="'.$self.'?page=keys">Keys</a></li>
-	</ul>
-	';
+	echo '<ul>';
+	foreach($pages as $page => $name)
+		echo '<li class="'.($page == $current_page ? 'selected' : '').'"><a href="'.$self.'?page='.$page.'">'.$name.'</a></li>';
+	echo '</ul>';
 }
 
 function index_account()
@@ -208,9 +218,38 @@ function index_data()
 	}
 }
 
+function index_header()
+{
+	global $pages, $current_page;
+	
+	echo '<!DOCTYPE>
+<html>
+	<head>
+		<title>'.$pages[$current_page].' – Wolk</title>
+		<style>
+			.selected {
+				color: red;
+			}
+		</style>
+	</head>
+	<body>
+	';
+}
+
+function index_footer()
+{
+	echo '
+	</body>
+</html>';
+}
+
 function main()
 {
+	global $current_page;
+	
 	ob_start();
+	
+	index_header();
 	
 	if(isset($_GET['message'])) {
 		echo '<p class="notice">'.htmlspecialchars($_GET['message'], ENT_COMPAT, 'utf-8').'</p>';
@@ -230,7 +269,7 @@ function main()
 		
 		index_navigation();
 		
-		switch(isset($_GET['page']) ? $_GET['page'] : null) {
+		switch($current_page) {
 			case 'account':
 				index_account();
 				break;
@@ -243,6 +282,8 @@ function main()
 				break;
 		}
 	}
+	
+	index_footer();
 }
 
 main();
