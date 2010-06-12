@@ -7,10 +7,6 @@ define('WOLK_EXCEPTION_MISSING_POST_DATA', 4);
 define('WOLK_EXCEPTION_INVALID_POST_DATA', 5);
 define('WOLK_EXCEPTION_UNKNOWN_ACTION', 6);
 
-function _debug($msg) {
-	file_put_contents('log.txt', $msg . "\n", FILE_APPEND);
-}
-
 function array_pluck($array, $index)
 {
 	$hits = array();
@@ -125,6 +121,30 @@ function wolk_user_openid($user_id)
 		: false;
 }
 
+function wolk_delete_user($user_id)
+{
+	global $db;
+	
+	try {
+		$db->beginTransaction();
+	
+		$stmt = $db->prepare("UPDATE api_keys SET revoked_on = NOW() WHERE user_id = :user_id");
+		$stmt->bindParam(':user_id', $user_id);
+		$stmt->execute();
+	
+		$stmt = $db->prepare("DELETE FROM users WHERE id = :user_id");
+		$stmt->bindParam(':user_id', $user_id);
+		$stmt->execute();
+		
+		$db->commit();
+		
+		return $stmt->rowCount();
+	} catch(PDOException $e) {
+		$db->rollBack();
+		throw $e;
+	}
+}
+
 function wolk_list_api_keys($user_id)
 {
 	global $db;
@@ -161,6 +181,17 @@ function wolk_revoke_api_key($api_key)
 
 class Wolk_ApiKey
 {
+	public $key;
+	
+	public $added_on;
+	
+	public $revoked_on;
+	
+	public function is_valid()
+	{
+		return $this->revoked_on === null;
+	}
+	
 	static public function generate()
 	{
 		$key = new self();
@@ -179,39 +210,60 @@ class Wolk_ApiKey
 			: null;
 		return $key;
 	}
-	
-	public $key;
-	
-	public $added_on;
-	
-	public $revoked_on;
-	
-	public function is_valid()
-	{
-		return $this->revoked_on === null;
-	}
 }
 
-function wolk_api_user()
-{
-	if(!isset($_GET['api_key']))
-		throw new Wolk_API_Exception('Missing api_key parameter', WOLK_EXCEPTION_MISSING_API_KEY);
-	
-	if(!($user_id = wolk_user_id($_GET['api_key'])))
-		throw new Wolk_API_Exception('Unkown api key', WOLK_EXCEPTION_UNKNOWN_API_KEY);
-	
-	return (int) $user_id;
-}
-
-function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = null)
+function wolk_list_origins($user_id)
 {
 	global $db;
 	
-	$conditions = array();
+	$stmt = $db->prepare("
+		SELECT
+			o.id,
+			o.origin,
+			MAX(p.last_modified_on) as last_updated_on
+		FROM
+			pairs as p
+		RIGHT JOIN origins as o ON
+			o.id = p.origin_id
+		WHERE
+			p.user_id = :user_id
+		GROUP BY
+			o.id,
+			o.origin
+	");
 	
-	$conditions[] = array('origin_id = :origin_id', ':origin_id' => $origin_id);
+	$stmt->bindParam(':user_id', $user_id);
+	$stmt->execute();
 	
-	$conditions[] = array('user_id = :user_id', ':user_id' => $user_id);
+	return array_map(array('Wolk_Origin', 'fetch'), $stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+class Wolk_Origin
+{
+	public $id;
+	
+	public $origin;
+	
+	public $last_updated_on;
+	
+	static public function fetch(array $data)
+	{
+		$origin = new self();
+		$origin->id = (int) $data['id'];
+		$origin->origin = $data['origin'];
+		$origin->last_updated_on = new DateTime($data['last_updated_on']);
+		return $origin;
+	}
+}
+
+function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since = null)
+{
+	global $db;
+	
+	$conditions = array(
+		array('origin_id = :origin_id', ':origin_id' => $origin_id),
+		array('user_id = :user_id', ':user_id' => $user_id)
+	);
 	
 	if($namespaces && count($namespaces)) {
 		foreach($namespaces as $namespace)
@@ -222,14 +274,14 @@ function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = 
 	
 	if($since) {
 		$datetime = date('Y-m-d H:i:s', strtotime($since));
-		$conditions[] = array('mtime > :since', ':since' => $datetime);
+		$conditions[] = array('last_modified_on > :since', ':since' => $datetime);
 	}
 	
 	$stmt = $db->prepare("
 		SELECT
-			pair_key as k,
-			pair_value as v,
-			mtime as m
+			pair_key,
+			pair_value,
+			last_modified_on
 		FROM
 			pairs
 		WHERE " . implode(' AND ', array_pluck($conditions, 0)));
@@ -243,32 +295,82 @@ function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = 
 	
 	$stmt->execute();
 
-	return $stmt->fetchAll(PDO::FETCH_ASSOC);
+	return array_map(array('Wolk_Pair', 'fetch'), $stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+class Wolk_Pair
+{
+	public $key;
+	
+	public $value;
+	
+	public $last_modified_on;
+	
+	static public function fetch(array $data)
+	{
+		$pair = new self();
+		$pair->key = $data['pair_key'];
+		$pair->value = $data['pair_value'];
+		$pair->last_modified_on = new DateTime($data['last_modified_on']);
+		return $pair;
+	}
+}
+
+function wolk_api_user()
+{
+	if(!isset($_GET['api_key']))
+		throw new Wolk_API_Exception('Missing api_key parameter', WOLK_EXCEPTION_MISSING_API_KEY);
+	
+	if(!($user_id = wolk_user_id_by_api_key($_GET['api_key'])))
+		throw new Wolk_API_Exception('Unkown api key', WOLK_EXCEPTION_UNKNOWN_API_KEY);
+	
+	return (int) $user_id;
+}
+
+function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = null)
+{
+	$pairs = wolk_list_pairs($user_id, $origin_id, $namespaces, $since);
+	
+	$response = array();
+	
+	foreach($pairs as $pair) {
+		$response[] = array(
+			'k' => $pair->key,
+			'v' => $pair->value,
+			'm' => $pair->last_modified_on
+		);
+	}
+	
+	return $response;
 }
 
 function wolk_api_write($user_id, $origin_id, array $data)
 {
 	global $db;
 	
-	$stmt = $db->prepare("INSERT INTO pairs (pair_key, pair_value, mtime, origin_id, user_id)
-		VALUES (:key, :value, :mtime, :origin_id, :user_id)
-		ON DUPLICATE KEY UPDATE pair_value = VALUES(pair_value), mtime = VALUES(mtime)");
+	$stmt = $db->prepare("
+		INSERT INTO pairs
+			(pair_key, pair_value, last_modified_on, origin_id, user_id)
+			VALUES (:key, :value, :last_modified_on, :origin_id, :user_id)
+		ON DUPLICATE KEY UPDATE
+			pair_value = IF(VALUES(last_modified_on) > last_modified_on, VALUES(pair_value), pair_value),
+			last_modified_on = IF(VALUES(last_modified_on) > last_modified_on, VALUES(last_modified_on), last_modified_on)");
 	
 	$stmt->bindParam(':origin_id', $origin_id, PDO::PARAM_INT);
 	$stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 	
 	$stmt->bindParam(':key', $key, PDO::PARAM_STR);
 	$stmt->bindParam(':value', $value, PDO::PARAM_STR);
-	$stmt->bindParam(':mtime', $mtime, PDO::PARAM_STR);
+	$stmt->bindParam(':last_modified_on', $last_modified_on, PDO::PARAM_STR);
 	
 	$n = 0;
 	
 	foreach($data as $pair) {
 		$key = $pair->k;
 		$value = $pair->v;
-		$mtime = wolk_api_date_to_sql($pair->m);
+		$last_modified_on = wolk_api_date_to_sql($pair->m);
 		$stmt->execute();
-		++$n;
+		$n += ($stmt->rowCount() > 0); // because it's always 0 or 2? Weird.
 	}
 	
 	return $n;
@@ -277,7 +379,6 @@ function wolk_api_write($user_id, $origin_id, array $data)
 function wolk_api_date_to_sql($json_date)
 {
 	$result = date('Y-m-d H:i:s', strtotime($json_date));
-	_debug('in: ' . $json_date . ' // out: ' . $result);
 	return $result;
 }
 
@@ -343,11 +444,9 @@ function wolk_api_main($action)
 		header("HTTP/1.0 500 Internal Server Error");
 		header('X-Error-Code: ' . $e->getCode());
 		echo $e->getMessage();
-		_debug($e);
 	}
 	catch(Exception $e) {
 		header("HTTP/1.0 500 Internal Server Error");
 		echo '<pre>' . $e . '</pre>';
-		_debug($e);
 	}
 }
