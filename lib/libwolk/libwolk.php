@@ -19,6 +19,11 @@ function array_pluck($array, $index)
 	return $hits;
 }
 
+function json_date($timestamp)
+{
+	return gmstrftime('%Y-%m-%dT%H:%M:%S.000Z', $timestamp);
+}
+
 function wolk_origin_id($origin)
 {
 	global $db;
@@ -337,7 +342,7 @@ function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = 
 		$response[] = array(
 			'k' => $pair->key,
 			'v' => $pair->value,
-			'm' => $pair->last_modified_on
+			'm' => json_date($pair->last_modified_on->getTimestamp())
 		);
 	}
 	
