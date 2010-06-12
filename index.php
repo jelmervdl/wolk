@@ -65,23 +65,35 @@ function index_openid_callback()
 		return index_login();
 }
 
+function _openid_discover_email($email, &$error = null)
+{
+	if(preg_match('/^[a-z0-9\!#\$%&\'\*\+\-\/\=\?\^_`\{\|\}~\.]+@([a-z0-9\.\-]+)$/i', $email, $matches)
+		&& ($dns_records = dns_get_record($matches[1], DNS_MX))
+		&& isset($dns_records[0])
+		&& preg_match('/\.googlemail\.com$|\.google\.com$/i', $dns_records[0]['target']))
+		return 'https://www.google.com/accounts/o8/id';
+	else
+		return $email;
+}
+
 function index_login()
 {
 	if(isset($_POST['openid_identifier'])) {
 		$openid = new LightOpenID();
-		$openid->identity = $_POST['openid_identifier'];
-		header('HTTP/1.1 307 Temporary Redirect');
-		header('Location: ' . $openid->authUrl());
+		$openid->identity = _openid_discover_email($_POST['openid_identifier']);
+		$auth_url = $openid->authUrl(true);
 		ob_end_clean();
-		printf('Redirecting to <a href="%s">%1$s</a>…', $openid->authUrl());
+		header('HTTP/1.1 307 Temporary Redirect');
+		header('Location: ' . $auth_url);
+		printf('Redirecting to <a href="%s">%1$s</a>…', $auth_url);
 		exit;
 	}
 	
 	echo '
 	<form method="post" action="">
-		<label for="openid_identifier">OpenID:</label>
+		<label for="openid_identifier">OpenID or Google ID:</label>
 		<input type="text" id="openid_identifier" name="openid_identifier">
-		<button type="submit">Log in</button>
+		<button type="submit">Sign in</button>
 	</form>
 	';
 }
