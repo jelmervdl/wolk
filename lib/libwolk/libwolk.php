@@ -404,19 +404,6 @@ function wolk_api_main($action)
 			case 'OPTIONS':
 				break;
 			
-			case 'GET':
-				$response = wolk_api_read(
-					wolk_api_user(),
-					wolk_api_origin(),
-					isset($_GET['namespaces']) && is_array($_GET['namespaces'])
-						? $_GET['namespaces']
-						: null,
-					isset($_GET['since'])
-						? $_GET['since']
-						: null
-				);
-				break;
-			
 			case 'POST':
 				$user_id = wolk_api_user();
 				
@@ -431,7 +418,19 @@ function wolk_api_main($action)
 				if(!is_array($data))
 					throw new Wolk_API_Exception('Expected an array as post data', WOLK_EXCEPTION_INVALID_POST_DATA);
 			
-				$response = wolk_api_write($user_id, $origin_id, $data);
+				wolk_api_write($user_id, $origin_id, $data);
+				// Note that POST will also execute the GET part. This is by design!
+			case 'GET':
+				$response = wolk_api_read(
+					wolk_api_user(),
+					wolk_api_origin(),
+					isset($_GET['namespaces']) && is_array($_GET['namespaces'])
+						? $_GET['namespaces']
+						: null,
+					isset($_GET['since'])
+						? $_GET['since']
+						: null
+				);
 				break;
 			
 			default:

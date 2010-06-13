@@ -1,0 +1,247 @@
+<script>
+
+var _api_key = function() {
+	return localStorage['__api_key'];
+}
+
+var _api_url = function() {
+	return localStorage['__api_url'];
+}
+
+var _load = function() {
+	document.getElementById('api_key').value = localStorage['__api_key'];
+	document.getElementById('api_url').value = localStorage['__api_url'];
+}
+
+var _apply = function() {
+	localStorage['__api_key'] = document.getElementById('api_key').value;
+	localStorage['__api_url'] = document.getElementById('api_url').value;
+}
+
+var _sync = function() {
+	var forceComplete = document.getElementById('force_complete').checked;
+	console.log(forceComplete, x.synchronize(forceComplete));
+}
+
+window.onload = _load;
+
+
+var request_data = [
+	{'k':'test.key1', 'v':'testwaarde één', 'm':new Date()},
+	{'k':'test.key2', 'v':'testwaarde due', 'm':new Date()}
+];
+
+function write()
+{
+	var x = new XMLHttpRequest();
+	x.open('POST', api_url(), true);
+	x.setRequestHeader('Content-Type', 'application/json');
+	x.onload = handle_response(x);
+	x.send(JSON.stringify(request_data));
+	return x;
+}
+
+function read()
+{
+	var x = new XMLHttpRequest();
+	x.open('GET', api_url(), true);
+	x.onload = handle_response(x);
+	x.send();
+	return x;
+}
+
+function handle_response(request) {
+	return function() {
+		console.log(request.status, request.responseText);
+	}
+}
+
+var Storage = function(namespace) {
+	this.namespace = namespace;
+}
+
+Storage.prototype = {
+	key: function() {
+		return Array.prototype.slice.apply(arguments).join('.');
+	},
+
+	inNamespace: function(key) {
+		return key.substr(0, this.namespace.length + 1) == this.namespace + '.';
+	},
+
+	isHidden: function(key) {
+		return /\.__/i.test(key);
+	},
+
+	clear: function() {
+		for(var key in localStorage) {
+			if(this.inNamespace(key))
+				localStorage.removeItem(key);
+		}
+	},
+	
+	clean: function() {
+		for(var key in localStorage) {
+			if(this.inNamespace(key) && this.isHidden(key))
+				localStorage.removeItem(key);
+		}
+	},
+
+	touch: function(key) {
+		if(!this.inNamespace(key))
+			throw Error('Key ' + key + ' not in my namespace ' + this.namespace);
+		
+		this.markDirty();
+		
+		return localStorage[this.key(key, '__lastModified')] = new Date();
+	},
+
+	lastModified: function(key) {
+		if(!this.inNamespace(key))
+			throw Error('Key ' + key + ' not in my namespace ' + this.namespace);
+		
+		if(!localStorage[this.key(key, '__lastModified')])
+			return this.touch(key);
+		
+		return new Date(localStorage[this.key(key, '__lastModified')]);
+	},
+
+	markDirty: function() {
+		
+	},
+
+	synchronize: function(forceCompleteSync) {
+		var syncLock = localStorage[this.key(this.namespace, '__sync_lock')];
+		
+		if(syncLock && new Date() - new Date(syncLock) < 1000)
+			return false;
+		
+		var self = this;
+		
+		var lock = function() {
+			localStorage[self.key(self.namespace, '__sync_lock')] = new Date();
+		}
+		
+		var unlock = function() {
+			localStorage[self.key(self.namespace, '__sync_lock')] = false;
+		}
+		
+		var markUpdated = function() {
+			localStorage[self.key(self.namespace, '__last_sync')] = new Date();
+		}
+		
+		lock();
+		
+		var lastSync = !forceCompleteSync && localStorage[this.key(this.namespace, '__last_sync')]
+			? new Date(localStorage[this.key(this.namespace, '__last_sync')])
+			: null;
+		
+		var pairsToSync = [];
+	
+		for(var key in localStorage) {
+			if(!this.inNamespace(key) || this.isHidden(key))
+				continue;
+			if(this.lastModified(key) > lastSync)
+				pairsToSync.push({
+					k: key,
+					v: localStorage[key],
+					m: this.lastModified(key)
+				});
+		}
+		
+		var apiUrl = _api_url()
+			+ '?api_key=' + encodeURIComponent(_api_key())
+			+ (lastSync
+				? '&since=' + encodeURIComponent('@' + Math.floor(lastSync.getTime() / 1000))
+				: '')
+			+ ('&' + [this.namespace].map(function(namespace) { // voor later
+						return 'namespaces[]='+encodeURIComponent(namespace);
+					}).join('&'));
+		
+		var method = pairsToSync.length > 0
+			? 'POST'
+			: 'GET';
+		
+		var data = pairsToSync.length > 0
+			? JSON.stringify(pairsToSync)
+			: null;
+		
+		var request = new XMLHttpRequest();
+		request.open(method, apiUrl, true);
+		
+		if(method == 'POST')
+			request.setRequestHeader('Content-Type', 'application/json');
+		
+		request.onload = function() {
+			try {
+				if(request.status == 500)
+					throw Error(request.responseText);
+				
+				var pairsToUpdate = JSON.parse(request.responseText);
+				
+				pairsToUpdate.forEach(function(pair) {
+					localStorage[pair.k] = pair.v;
+					localStorage[pair.k + '.__lastModified'] = pair.m;
+				});
+			}
+			catch(e) {
+				console.log('sync read failed', e);
+			}
+			finally {
+				markUpdated();
+				unlock();
+			}
+		}
+		
+		request.onerror = function() {
+			unlock();
+		}
+		
+		request.send(data);
+		
+		return true;
+	}
+}
+
+window.x = new Storage('test');
+	
+</script>
+<style>
+	.prefs input {
+		float: left;
+		width: 300px;
+	}
+	
+	.prefs label {
+		float: left;
+		width: 150px;
+		text-align: right;
+		padding-right: 10px;
+	}
+	
+	.prefs input, .prefs label {
+		font: 16px/20px Helvetica;
+	}
+	
+	br {
+		clear: both;
+	}
+</style>
+<section>
+	<fieldset class="prefs">
+		<legend>Sync Preferences</legend>
+		<label for="api_key">API Key</label>
+		<input type="text" id="api_key" value="">
+		<br>
+		<label for="api_url">API URL</label>
+		<input type="text" id="api_url" value="http://localhost/~jelmer/wolk/api">
+		<br>
+		<button onclick="_apply()">Apply</button>
+		<button onclick="_load()">Cancel</button>
+	</fieldset>
+	<fieldset>
+		<button onclick="_sync()">Storage.synchronize()</button>
+		<input type="checkbox" id="force_complete">
+		<label for="force_complete">Force Complete Sync</label>
+	</fieldset>
+</section>
