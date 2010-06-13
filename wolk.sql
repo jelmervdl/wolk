@@ -7,7 +7,7 @@
 #
 # Host: 127.0.0.1 (MySQL 5.5.0-m2)
 # Database: wolk
-# Generation Time: 2010-06-11 19:20:46 +0200
+# Generation Time: 2010-06-13 16:35:38 +0200
 # ************************************************************
 
 
@@ -20,6 +20,46 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 
+# Dump of table api_keys
+# ------------------------------------------------------------
+
+DROP TABLE IF EXISTS `api_keys`;
+
+CREATE TABLE `api_keys` (
+  `user_id` int(11) DEFAULT NULL,
+  `api_key` char(32) NOT NULL,
+  `added_on` datetime NOT NULL,
+  `revoked_on` datetime DEFAULT NULL,
+  PRIMARY KEY (`api_key`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `api_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+
+# Dump of table messages
+# ------------------------------------------------------------
+
+DROP TABLE IF EXISTS `messages`;
+
+CREATE TABLE `messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `origin_id` int(11) NOT NULL,
+  `api_key` char(32) DEFAULT NULL,
+  `message` varchar(255) NOT NULL,
+  `created_on` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `origin_id` (`origin_id`),
+  KEY `api_key` (`api_key`),
+  CONSTRAINT `messages_ibfk_3` FOREIGN KEY (`api_key`) REFERENCES `api_keys` (`api_key`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `messages_ibfk_2` FOREIGN KEY (`origin_id`) REFERENCES `origins` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+
+
+
 # Dump of table origins
 # ------------------------------------------------------------
 
@@ -30,18 +70,8 @@ CREATE TABLE `origins` (
   `origin` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `u_origin` (`origin`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8;
 
-LOCK TABLES `origins` WRITE;
-/*!40000 ALTER TABLE `origins` DISABLE KEYS */;
-
-INSERT INTO `origins` (`id`,`origin`)
-VALUES
-	(2,'http://wolk.ikhoefgeen.nl'),
-	(1,'http://www.ikhoefgeen.nl');
-
-/*!40000 ALTER TABLE `origins` ENABLE KEYS */;
-UNLOCK TABLES;
 
 
 # Dump of table pairs
@@ -52,27 +82,17 @@ DROP TABLE IF EXISTS `pairs`;
 CREATE TABLE `pairs` (
   `pair_key` varchar(255) NOT NULL,
   `pair_value` varchar(255) DEFAULT NULL,
-  `mtime` datetime NOT NULL,
+  `last_modified_on` datetime NOT NULL,
   `origin_id` int(11) NOT NULL DEFAULT '0',
   `user_id` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`pair_key`,`origin_id`,`user_id`),
-  KEY `remote_read_index` (`mtime`,`origin_id`),
+  KEY `remote_read_index` (`last_modified_on`,`origin_id`),
   KEY `origin_id` (`origin_id`),
   KEY `user_id` (`user_id`),
   CONSTRAINT `pairs_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `pairs_ibfk_1` FOREIGN KEY (`origin_id`) REFERENCES `origins` (`id`) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-LOCK TABLES `pairs` WRITE;
-/*!40000 ALTER TABLE `pairs` DISABLE KEYS */;
-
-INSERT INTO `pairs` (`pair_key`,`pair_value`,`mtime`,`origin_id`,`user_id`)
-VALUES
-	('test.key1','testwaarde Ã©Ã©n','2010-06-11 18:31:49',2,1),
-	('test.key2','testwaarde due','2010-06-11 18:31:49',2,1);
-
-/*!40000 ALTER TABLE `pairs` ENABLE KEYS */;
-UNLOCK TABLES;
 
 
 # Dump of table users
@@ -82,22 +102,12 @@ DROP TABLE IF EXISTS `users`;
 
 CREATE TABLE `users` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `email` varchar(255) NOT NULL,
-  `api_key` char(32) NOT NULL,
+  `openid` varchar(255) NOT NULL,
+  `added_on` datetime NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `u_email` (`email`),
-  UNIQUE KEY `u_api_key` (`api_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+  UNIQUE KEY `u_openid` (`openid`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8;
 
-LOCK TABLES `users` WRITE;
-/*!40000 ALTER TABLE `users` DISABLE KEYS */;
-
-INSERT INTO `users` (`id`,`email`,`api_key`)
-VALUES
-	(1,'jelmer@ikhoefgeen.nl','c012fe520c1d85db118a7f415d8c9db8');
-
-/*!40000 ALTER TABLE `users` ENABLE KEYS */;
-UNLOCK TABLES;
 
 
 

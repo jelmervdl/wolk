@@ -332,6 +332,24 @@ function wolk_api_user()
 	return (int) $user_id;
 }
 
+function wolk_api_add_message($user_id, $origin_id, $message)
+{
+	global $db;
+	
+	$stmt = $db->prepare("INSERT INTO messages
+		(user_id, origin_id, api_key, message, created_on)
+		VALUES(:user_id, :origin_id, :api_key, :message, NOW())");
+	
+	$stmt->bindParam(':user_id', $user_id);
+	$stmt->bindParam(':origin_id', $origin_id);
+	$stmt->bindParam(':message', $message);
+	$stmt->bindValue(':api_key', isset($_GET['api_key'])
+		? $_GET['api_key']
+		: null);
+	
+	$stmt->execute();
+}
+
 function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = null)
 {
 	$pairs = wolk_list_pairs($user_id, $origin_id, $namespaces, $since);
@@ -418,7 +436,10 @@ function wolk_api_main($action)
 				if(!is_array($data))
 					throw new Wolk_API_Exception('Expected an array as post data', WOLK_EXCEPTION_INVALID_POST_DATA);
 			
-				wolk_api_write($user_id, $origin_id, $data);
+				$changes = wolk_api_write($user_id, $origin_id, $data);
+				
+				wolk_api_add_message($user_id, $origin_id, "Synced $changes changes");
+				
 				// Note that POST will also execute the GET part. This is by design!
 			case 'GET':
 				$response = wolk_api_read(
