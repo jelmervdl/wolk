@@ -12,6 +12,7 @@ $self = 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['SCRIPT_NAME'];
 
 $pages = array(
 	'keys' => 'Keys',
+	'events' => 'Events',
 	'data' => 'Data',
 	'account' => 'Account'
 );
@@ -19,6 +20,32 @@ $pages = array(
 $current_page = isset($_GET['page']) && isset($pages[$_GET['page']])
 	? $_GET['page']
 	: 'keys';
+
+function _relative_date($datetime)
+{
+	$diff = time() - $datetime->getTimestamp();
+
+	$steps = array(
+		array(1,			array('second', 'seconds')),
+		array(60,			array('minute', 'minutes')),
+		array(3600,			array('hour', 'hours')),
+		array(24*3600,		array('day', 'days')),
+		array(7*24*3600,	array('week', 'weeks')),
+		array(30*24*3600,	false)
+	);
+
+	for($i = 1; $i < count($steps); ++$i) {
+		if($diff >= $steps[$i][0])
+			continue;
+	
+		$scaled = round($diff / $steps[$i-1][0]);
+	
+		return sprintf('%d %s ago', $scaled, $scaled === 1.0 ?
+			$steps[$i - 1][1][0] : $steps[$i - 1][1][1]);
+	}
+
+	return $datetime->format('j F, Y');
+}
 
 function index_api_login($openid_identifier)
 {
@@ -98,6 +125,16 @@ function index_login()
 	';
 }
 
+function index_navigation()
+{
+	global $self, $pages, $current_page;
+	
+	echo '<ul>';
+	foreach($pages as $page => $name)
+		echo '<li class="'.($page == $current_page ? 'selected' : '').'"><a href="'.$self.'?page='.$page.'">'.$name.'</a></li>';
+	echo '</ul>';
+}
+
 function index_api_keys()
 {
 	if(isset($_POST['generate_key'])) {
@@ -142,14 +179,21 @@ function index_api_keys()
 	';
 }
 
-function index_navigation()
+function index_events()
 {
-	global $self, $pages, $current_page;
-	
-	echo '<ul>';
-	foreach($pages as $page => $name)
-		echo '<li class="'.($page == $current_page ? 'selected' : '').'"><a href="'.$self.'?page='.$page.'">'.$name.'</a></li>';
-	echo '</ul>';
+	echo '
+	<ol>
+	';
+	foreach(wolk_list_events($_SESSION['user_id']) as $event) {
+		echo '<li>';
+		echo htmlspecialchars($event->message, ENT_COMPAT, 'utf-8');
+		if($event->api_key) echo ' using <em>' . $event->api_key . '</em>';
+		echo ' ' . _relative_date($event->created_on);
+		echo '</li>';
+	}
+	echo '
+	</ol>
+	';
 }
 
 function index_account()
@@ -284,6 +328,9 @@ function main()
 		switch($current_page) {
 			case 'account':
 				index_account();
+				break;
+			case 'events':
+				index_events();
 				break;
 			case 'data':
 				index_data();

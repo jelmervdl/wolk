@@ -24,6 +24,43 @@ function json_date($timestamp)
 	return gmstrftime('%Y-%m-%dT%H:%M:%S.000Z', $timestamp);
 }
 
+function _wolk_translate_conditions_to_sql(array $conditions)
+{
+	return implode(' AND ', array_pluck($conditions, 0));
+}
+
+function _wolk_bind_conditions_to_stmt(array $conditions, $stmt)
+{
+	foreach($conditions as $condition) {
+		foreach($condition as $placeholder => $value) {
+			if(!is_int($placeholder))
+				$stmt->bindValue($placeholder, $value);
+		}
+	}
+}
+
+function _wolk_insert_data_into_object(array $data, $object, array $map = array(), array $decorators = array())
+{
+	foreach($data as $key => $value) {
+		if(isset($map[$key]))
+			$key = $map[$key];
+		
+		if(isset($decorators[$key]))
+			$value = call_user_func($decorators[$key], $value);
+		
+		$object->$key = $value;
+	}
+	
+	return $object;
+}
+
+function _wolk_date_create($date = null)
+{
+	return $date
+		? new DateTime($date)
+		: null;
+}
+
 function wolk_origin_id($origin)
 {
 	global $db;
@@ -207,13 +244,9 @@ class Wolk_ApiKey
 	
 	static public function fetch(array $data)
 	{
-		$key = new self();
-		$key->key = $data['api_key'];
-		$key->added_on = new DateTime($data['added_on']);
-		$key->revoked_on = $data['revoked_on']
-			? new DateTime($data['revoked_on'])
-			: null;
-		return $key;
+		return _wolk_insert_data_into_object($data, new self(),
+			array('api_key' => 'key'),
+			array('added_on' => '_wolk_date_create', 'revoked_on' => '_wolk_date_create'));
 	}
 }
 
@@ -253,11 +286,9 @@ class Wolk_Origin
 	
 	static public function fetch(array $data)
 	{
-		$origin = new self();
-		$origin->id = (int) $data['id'];
-		$origin->origin = $data['origin'];
-		$origin->last_updated_on = new DateTime($data['last_updated_on']);
-		return $origin;
+		return _wolk_insert_data_into_object($data, new self(),
+			array(),
+			array('id' => 'intval', 'last_updated_on' => '_wolk_date_create'));
 	}
 }
 
@@ -282,6 +313,8 @@ function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since 
 		$conditions[] = array('last_modified_on > :since', ':since' => $datetime);
 	}
 	
+	$sql_conditions = _wolk_translate_conditions_to_sql($conditions);
+	
 	$stmt = $db->prepare("
 		SELECT
 			pair_key,
@@ -289,14 +322,10 @@ function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since 
 			last_modified_on
 		FROM
 			pairs
-		WHERE " . implode(' AND ', array_pluck($conditions, 0)));
+		WHERE
+			$sql_conditions");
 	
-	foreach($conditions as $condition) {
-		foreach($condition as $placeholder => $value) {
-			if(!is_int($placeholder))
-				$stmt->bindValue($placeholder, $value);
-		}
-	}
+	_wolk_bind_conditions_to_stmt($conditions, $stmt);
 	
 	$stmt->execute();
 
@@ -313,11 +342,10 @@ class Wolk_Pair
 	
 	static public function fetch(array $data)
 	{
-		$pair = new self();
-		$pair->key = $data['pair_key'];
-		$pair->value = $data['pair_value'];
-		$pair->last_modified_on = new DateTime($data['last_modified_on']);
-		return $pair;
+		return _wolk_insert_data_into_object(
+			$data, new self(),
+			array('pair_key' => 'key', 'pair_value' => 'value'),
+			array('last_modified_on' => '_wolk_date_create'));
 	}
 }
 
@@ -332,11 +360,11 @@ function wolk_api_user()
 	return (int) $user_id;
 }
 
-function wolk_api_add_message($user_id, $origin_id, $message)
+function wolk_add_event($user_id, $origin_id, $message)
 {
 	global $db;
 	
-	$stmt = $db->prepare("INSERT INTO messages
+	$stmt = $db->prepare("INSERT INTO events
 		(user_id, origin_id, api_key, message, created_on)
 		VALUES(:user_id, :origin_id, :api_key, :message, NOW())");
 	
@@ -348,6 +376,70 @@ function wolk_api_add_message($user_id, $origin_id, $message)
 		: null);
 	
 	$stmt->execute();
+}
+
+function wolk_list_events($user_id, $origin_id = null, $api_key = null, $limit = 50)
+{
+	global $db;
+	
+	$conditions = array();
+	
+	$conditions[] = array('user_id = :user_id', ':user_id' => $user_id);
+	
+	if($origin_id)
+		$conditions[] = array('origin_id = :origin_id', ':origin_id' => $origin_id);
+	
+	if($api_key)
+		$conditions[] = array('api_key = :api_key', ':api_key' => $api_key);
+	
+	$sql_conditions = _wolk_translate_conditions_to_sql($conditions);
+	
+	$limit = intval($limit);
+	
+	$stmt = $db->prepare("
+		SELECT
+			id,
+			user_id,
+			origin_id,
+			api_key,
+			message,
+			created_on
+		FROM
+			events
+		WHERE
+			$sql_conditions
+		ORDER BY
+			created_on DESC
+		LIMIT $limit
+	");
+	
+	_wolk_bind_conditions_to_stmt($conditions, $stmt);
+	
+	$stmt->execute();
+	
+	return array_map(array('Wolk_Event', 'fetch'), $stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+class Wolk_Event
+{
+	public $id;
+	
+	public $user_id;
+	
+	public $origin_id;
+	
+	public $api_key;
+	
+	public $message;
+	
+	public $created_on;
+	
+	static public function fetch(array $data)
+	{
+		return _wolk_insert_data_into_object($data, new self(),
+			array(), 
+			array('id' => 'intval', 'created_on' => '_wolk_date_create'));
+	}
 }
 
 function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = null)
@@ -438,7 +530,7 @@ function wolk_api_main($action)
 			
 				$changes = wolk_api_write($user_id, $origin_id, $data);
 				
-				wolk_api_add_message($user_id, $origin_id, "Synced $changes changes");
+				wolk_add_event($user_id, $origin_id, "Synced $changes changes");
 				
 				// Note that POST will also execute the GET part. This is by design!
 			case 'GET':

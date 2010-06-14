@@ -1,0 +1,4 @@
+Wolk is an attempt to implement some sort of syncing HTML5's localStorage across
+multiple browsers with as little hassle as possible. The client could be
+implemented as a javascript library or a browser extension, the server side is
+written in PHP and should work on a simple shared hosting account.
