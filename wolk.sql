@@ -7,7 +7,7 @@
 #
 # Host: 127.0.0.1 (MySQL 5.5.0-m2)
 # Database: wolk
-# Generation Time: 2010-06-13 16:35:38 +0200
+# Generation Time: 2010-06-14 22:57:15 +0200
 # ************************************************************
 
 
@@ -37,12 +37,12 @@ CREATE TABLE `api_keys` (
 
 
 
-# Dump of table messages
+# Dump of table events
 # ------------------------------------------------------------
 
-DROP TABLE IF EXISTS `messages`;
+DROP TABLE IF EXISTS `events`;
 
-CREATE TABLE `messages` (
+CREATE TABLE `events` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
   `origin_id` int(11) NOT NULL,
@@ -53,10 +53,10 @@ CREATE TABLE `messages` (
   KEY `user_id` (`user_id`),
   KEY `origin_id` (`origin_id`),
   KEY `api_key` (`api_key`),
-  CONSTRAINT `messages_ibfk_3` FOREIGN KEY (`api_key`) REFERENCES `api_keys` (`api_key`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `messages_ibfk_2` FOREIGN KEY (`origin_id`) REFERENCES `origins` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
+  CONSTRAINT `events_ibfk_3` FOREIGN KEY (`api_key`) REFERENCES `api_keys` (`api_key`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `events_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `events_ibfk_2` FOREIGN KEY (`origin_id`) REFERENCES `origins` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
 
 
 
