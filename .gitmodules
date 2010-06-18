@@ -1,0 +1,3 @@
+[submodule "lib/lightopenid"]
+	path = lib/lightopenid
+	url = git://gitorious.org/lightopenid/lightopenid.git
