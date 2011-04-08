@@ -5,17 +5,27 @@ multiple browsers with as little hassle as possible. The client could be
 implemented as a javascript library or a browser extension, the server side is
 written in PHP and should work on a simple shared hosting account.
 
+Set up
+======
+
 Getting *all* the code
-====================
+----------------------
 Since this repository depends on another repository, namely [lightopenid](http://gitorious.org/lightopenid/), you will need to take some additional steps to get the submodules:
 
 	git clone git://github.com/jelmervdl/wolk.git
 	git submodule init
 	git submodule update
 
-Set up
-======
-Just copy `conf/db.php.default` to `conf/db.php` and provide your mysql credentials and a database name. Use `wolk.sql` to create the tables.
+Configure database
+------------------
+Just copy `conf/db.php.default` to `conf/db.php` and provide your mysql credentials and a database name. Use `wolk.sql` to create the tables. Or as explained in command-line terms:
+
+	$ mysql
+	mysql> CREATE DATABASE wolk;
+	mysql> connect wolk
+	mysql> source path/to/wolk.sql
+	mysql> CREATE USER 'wolk'@'localhost' IDENTIFIED BY 'wolk';
+	mysql> GRANT SELECT, INSERT, UPDATE ON wolk.* TO 'wolk'@'localhost';	
 
 API
 ===
