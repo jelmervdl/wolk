@@ -9,8 +9,8 @@ var _api_url = function() {
 }
 
 var _load = function() {
-	document.getElementById('api_key').value = localStorage['__api_key'];
-	document.getElementById('api_url').value = localStorage['__api_url'];
+	document.getElementById('api_key').value = localStorage['__api_key'] || '';
+	document.getElementById('api_url').value = localStorage['__api_url'] || document.location.href.replace('test.html', 'sync.php');
 }
 
 var _apply = function() {
@@ -231,10 +231,10 @@ window.x = new Storage('test');
 	<fieldset class="prefs">
 		<legend>Sync Preferences</legend>
 		<label for="api_key">API Key</label>
-		<input type="text" id="api_key" value="">
+		<input type="text" id="api_key">
 		<br>
 		<label for="api_url">API URL</label>
-		<input type="text" id="api_url" value="http://localhost/~jelmer/wolk/api">
+		<input type="text" id="api_url">
 		<br>
 		<button onclick="_apply()">Apply</button>
 		<button onclick="_load()">Cancel</button>
