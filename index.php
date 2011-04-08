@@ -1,10 +1,9 @@
 <?php
 
-include 'lib/lightopenid/openid.php';
+require 'lib/lightopenid/openid.php';
+require 'lib/libwolk/libwolk.php';
 
-include 'lib/libwolk/libwolk.php';
-
-include 'conf/db.php';
+include 'conf/website.php';
 
 session_start();
 

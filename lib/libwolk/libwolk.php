@@ -61,11 +61,17 @@ function _wolk_date_create($date = null)
 		: null;
 }
 
+function wolk_set_database(PDO $pdo)
+{
+	global $_wolk_db;
+	$_wolk_db = $pdo;
+}
+
 function wolk_origin_id($origin)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("SELECT id FROM origins WHERE origin = :origin");
+	$stmt = $_wolk_db->prepare("SELECT id FROM origins WHERE origin = :origin");
 	$stmt->bindParam(':origin', $origin, PDO::PARAM_STR);
 	return $stmt->execute()
 		? $stmt->fetchColumn()
@@ -74,12 +80,12 @@ function wolk_origin_id($origin)
 
 function wolk_origin_add($origin)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("INSERT INTO origins (origin) VALUES(:origin)");
+	$stmt = $_wolk_db->prepare("INSERT INTO origins (origin) VALUES(:origin)");
 	$stmt->bindParam(':origin', $origin, PDO::PARAM_STR);
 	return $stmt->execute()
-		? $db->lastInsertId()
+		? $_wolk_db->lastInsertId()
 		: false;
 }
 
@@ -107,9 +113,9 @@ function wolk_api_origin()
 
 function wolk_user_id_by_api_key($api_key)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("
+	$stmt = $_wolk_db->prepare("
 		SELECT
 			u.id
 		FROM
@@ -129,26 +135,26 @@ function wolk_user_id_by_api_key($api_key)
 
 function wolk_user_id_by_openid($openid_identifier)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("SELECT id FROM users WHERE openid = :openid");
+	$stmt = $_wolk_db->prepare("SELECT id FROM users WHERE openid = :openid");
 	$stmt->bindParam(':openid', $openid_identifier);
 	$stmt->execute();
 	if($id = $stmt->fetchColumn())
 		return $id;
 	
-	$stmt = $db->prepare("INSERT INTO users (openid, added_on) VALUES(:openid, NOW())");
+	$stmt = $_wolk_db->prepare("INSERT INTO users (openid, added_on) VALUES(:openid, NOW())");
 	$stmt->bindParam(':openid', $openid_identifier);
 	return $stmt->execute()
-		? $db->lastInsertId()
+		? $_wolk_db->lastInsertId()
 		: false;
 }
 
 function wolk_user_openid($user_id)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("
+	$stmt = $_wolk_db->prepare("
 		SELECT
 			openid
 		FROM
@@ -165,33 +171,33 @@ function wolk_user_openid($user_id)
 
 function wolk_delete_user($user_id)
 {
-	global $db;
+	global $_wolk_db;
 	
 	try {
-		$db->beginTransaction();
+		$_wolk_db->beginTransaction();
 	
-		$stmt = $db->prepare("UPDATE api_keys SET revoked_on = NOW() WHERE user_id = :user_id");
+		$stmt = $_wolk_db->prepare("UPDATE api_keys SET revoked_on = NOW() WHERE user_id = :user_id");
 		$stmt->bindParam(':user_id', $user_id);
 		$stmt->execute();
 	
-		$stmt = $db->prepare("DELETE FROM users WHERE id = :user_id");
+		$stmt = $_wolk_db->prepare("DELETE FROM users WHERE id = :user_id");
 		$stmt->bindParam(':user_id', $user_id);
 		$stmt->execute();
 		
-		$db->commit();
+		$_wolk_db->commit();
 		
 		return $stmt->rowCount();
 	} catch(PDOException $e) {
-		$db->rollBack();
+		$_wolk_db->rollBack();
 		throw $e;
 	}
 }
 
 function wolk_list_api_keys($user_id)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("SELECT api_key, added_on, revoked_on FROM api_keys WHERE user_id = :user_id ORDER BY added_on ASC");
+	$stmt = $_wolk_db->prepare("SELECT api_key, added_on, revoked_on FROM api_keys WHERE user_id = :user_id ORDER BY added_on ASC");
 	$stmt->bindParam(':user_id', $user_id);
 	$stmt->execute();
 	
@@ -200,10 +206,10 @@ function wolk_list_api_keys($user_id)
 
 function wolk_generate_api_key($user_id)
 {
-	global $db;
+	global $_wolk_db;
 	
 	$api_key = Wolk_ApiKey::generate();
-	$stmt = $db->prepare("INSERT INTO api_keys (user_id, api_key, added_on) VALUES(:user_id, :api_key, :added_on)");
+	$stmt = $_wolk_db->prepare("INSERT INTO api_keys (user_id, api_key, added_on) VALUES(:user_id, :api_key, :added_on)");
 	$stmt->bindParam(':user_id', $user_id);
 	$stmt->bindParam(':api_key', $api_key->key);
 	$stmt->bindValue(':added_on', $api_key->added_on->format('Y-m-d H:i:s'));
@@ -213,9 +219,9 @@ function wolk_generate_api_key($user_id)
 
 function wolk_revoke_api_key($api_key)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("UPDATE api_keys SET revoked_on = NOW() WHERE api_key = :api_key");
+	$stmt = $_wolk_db->prepare("UPDATE api_keys SET revoked_on = NOW() WHERE api_key = :api_key");
 	$stmt->bindParam(':api_key', $api_key);
 	$stmt->execute();
 	return $stmt->rowCount();
@@ -252,9 +258,9 @@ class Wolk_ApiKey
 
 function wolk_list_origins($user_id)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("
+	$stmt = $_wolk_db->prepare("
 		SELECT
 			o.id,
 			o.origin,
@@ -294,7 +300,7 @@ class Wolk_Origin
 
 function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since = null)
 {
-	global $db;
+	global $_wolk_db;
 	
 	$conditions = array(
 		array('origin_id = :origin_id', ':origin_id' => $origin_id),
@@ -303,7 +309,7 @@ function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since 
 	
 	if($namespaces && count($namespaces)) {
 		foreach($namespaces as $namespace)
-			$namespace_conditions[] = 'pair_key LIKE ' . $db->quote($namespace . '.%');
+			$namespace_conditions[] = 'pair_key LIKE ' . $_wolk_db->quote($namespace . '.%');
 	
 		$conditions[] = array('(' . implode(' OR ', $namespace_conditions) . ')');
 	}
@@ -315,7 +321,7 @@ function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since 
 	
 	$sql_conditions = _wolk_translate_conditions_to_sql($conditions);
 	
-	$stmt = $db->prepare("
+	$stmt = $_wolk_db->prepare("
 		SELECT
 			pair_key,
 			pair_value,
@@ -362,9 +368,9 @@ function wolk_api_user()
 
 function wolk_add_event($user_id, $origin_id, $message)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("INSERT INTO events
+	$stmt = $_wolk_db->prepare("INSERT INTO events
 		(user_id, origin_id, api_key, message, created_on)
 		VALUES(:user_id, :origin_id, :api_key, :message, NOW())");
 	
@@ -380,7 +386,7 @@ function wolk_add_event($user_id, $origin_id, $message)
 
 function wolk_list_events($user_id, $origin_id = null, $api_key = null, $limit = 50)
 {
-	global $db;
+	global $_wolk_db;
 	
 	$conditions = array();
 	
@@ -396,7 +402,7 @@ function wolk_list_events($user_id, $origin_id = null, $api_key = null, $limit =
 	
 	$limit = intval($limit);
 	
-	$stmt = $db->prepare("
+	$stmt = $_wolk_db->prepare("
 		SELECT
 			id,
 			user_id,
@@ -461,9 +467,9 @@ function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = 
 
 function wolk_api_write($user_id, $origin_id, array $data)
 {
-	global $db;
+	global $_wolk_db;
 	
-	$stmt = $db->prepare("
+	$stmt = $_wolk_db->prepare("
 		INSERT INTO pairs
 			(pair_key, pair_value, last_modified_on, origin_id, user_id)
 			VALUES (:key, :value, :last_modified_on, :origin_id, :user_id)

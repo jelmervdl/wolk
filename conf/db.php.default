@@ -1,0 +1,5 @@
+<?php
+
+$db = new PDO('mysql:host=localhost;dbname=wolk', 'wolk', 'wolk');
+$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+return $db;
