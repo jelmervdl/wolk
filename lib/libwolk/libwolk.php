@@ -338,6 +338,31 @@ function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since 
 	return array_map(array('Wolk_Pair', 'fetch'), $stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
+function wolk_delete_pairs($user_id, $keys, $origin_id)
+{
+	global $_wolk_db;
+
+	$sql_keys = array_map(array($_wolk_db, 'quote'), $keys);
+	
+	$conditions = array(
+		array('origin_id = :origin_id', ':origin_id' => $origin_id),
+		array('user_id = :user_id', ':user_id' => $user_id),
+		array('pair_key IN ( ' . implode(', ', $sql_keys) . ')')
+	);
+
+	$sql_conditions = _wolk_translate_conditions_to_sql($conditions);
+
+	$stmt = $_wolk_db->prepare("
+		DELETE FROM
+			pairs
+		WHERE
+			$sql_conditions");
+
+	_wolk_bind_conditions_to_stmt($conditions, $stmt);
+
+	$stmt->execute();
+}
+
 class Wolk_Pair
 {
 	public $key;

@@ -230,6 +230,16 @@ function index_data()
 		? (int) $_GET['origin']
 		: null;
 	
+	if ($_SERVER['REQUEST_METHOD'] == 'POST')
+	{
+		switch ($_POST['action'])
+		{
+			case 'delete':
+				wolk_delete_pairs($_SESSION['user_id'], $_POST['keys'], $selected_origin);
+				break;
+		}
+	}
+	
 	echo '
 	<ol>
 	';
@@ -247,28 +257,33 @@ function index_data()
 	
 	if($selected_origin) {
 		echo '
-		<table>
-			<thead>
-				<tr>
-					<th>Key</th>
-					<th>Value</th>
-					<th>Last Updated</th>
-				</tr>
-			</thead>
-			<tbody>
-		';
+		<form method="post">
+			<table>
+				<thead>
+					<tr>
+						<th><input type="checkbox"></th>
+						<th>Key</th>
+						<th>Value</th>
+						<th>Last Updated</th>
+					</tr>
+				</thead>
+				<tbody>
+			';
 		foreach(wolk_list_pairs($_SESSION['user_id'], $selected_origin) as $pair) {
 			echo '
-				<tr>
-					<td>'.htmlspecialchars($pair->key, ENT_COMPAT, 'utf-8').'</td>
-					<td>'.htmlspecialchars($pair->value, ENT_COMPAT, 'utf-8').'</td>
-					<td>'.$pair->last_modified_on->format('d-m-Y H:i:s').'</td>
-				</tr>
+					<tr>
+						<td><input type="checkbox" name="keys[]" value="'.htmlspecialchars($pair->key, ENT_QUOTES, 'utf-8').'"></td>
+						<td>'.htmlspecialchars($pair->key, ENT_COMPAT, 'utf-8').'</td>
+						<td>'.htmlspecialchars($pair->value, ENT_COMPAT, 'utf-8').'</td>
+						<td>'.$pair->last_modified_on->format('d-m-Y H:i:s').'</td>
+					</tr>
 			';
 		}
 		echo '
-			</tbody>
-		</table>
+				</tbody>
+			</table>
+			<button type="submit" name="action" value="delete">Delete</button>
+		</form>
 		';
 	}
 }
