@@ -58,94 +58,159 @@ function handle_response(request) {
 
 var Storage = function(namespace) {
 	this.namespace = namespace;
+	this.isDirty = false;
+	this.listeners = {};
 }
 
 Storage.prototype = {
+	
 	key: function() {
-		return Array.prototype.slice.apply(arguments).join('.');
+		return this.namespace + '.' + Array.prototype.slice.apply(arguments).join('.');
 	},
 
-	inNamespace: function(key) {
-		return key.substr(0, this.namespace.length + 1) == this.namespace + '.';
-	},
-
-	isHidden: function(key) {
-		return /\.__/i.test(key);
-	},
-
-	clear: function() {
-		for(var key in localStorage) {
-			if(this.inNamespace(key))
-				localStorage.removeItem(key);
-		}
+	localKey: function(fullKey) {
+		// @TODO fix this so namespace can contain regular expression operators
+		// without breaking this expression.
+		return fullKey.replace(new RegExp('^' + this.namespace + '\.'), '');
 	},
 	
-	clean: function() {
-		for(var key in localStorage) {
-			if(this.inNamespace(key) && this.isHidden(key))
-				localStorage.removeItem(key);
-		}
+	inNamespace: function(key) {
+		return key.substr(0, this.namespace.length) == this.namespace;
 	},
-
-	touch: function(key) {
-		if(!this.inNamespace(key))
-			throw Error('Key ' + key + ' not in my namespace ' + this.namespace);
+	
+	isHidden: function(key) {
+		return key.substr(this.namespace.length + 1, 2) == '__';
+	},
+	
+	encode: JSON.stringify,
+	
+	decode: JSON.parse,
+	
+	timestamp: function() {
+		return new Date().getTime();
+	},
+	
+	get: function(key) {
+		if (!this.exists(key))
+			return null;
 		
+		data = window.localStorage[this.key(key)].split(';', 2);
+		
+		return data && data.length >= 2 ? this.decode(data[1]) : null;
+	},
+	
+	set: function(key, value, timestamp) {
+		window.localStorage[this.key(key)] = [timestamp || this.timestamp(), this.encode(value)].join(';');
+		this.emit(key, value);
 		this.markDirty();
-		
-		return localStorage[this.key(key, '__lastModified')] = new Date();
 	},
-
+	
+	remove: function(key) {
+		this.set(key, null);
+	},
+	
+	exists: function(key) {
+		return typeof window.localStorage[this.key(key)] != 'undefined';
+	},
+	
+	isNull: function(key) {
+		return this.get(key) === null;
+	},
+	
+	touch: function(key) {
+		this.set(key, this.get(key));
+	},
+	
 	lastModified: function(key) {
-		if(!this.inNamespace(key))
-			throw Error('Key ' + key + ' not in my namespace ' + this.namespace);
+		if (!this.exists(key))
+			return null;
 		
-		if(!localStorage[this.key(key, '__lastModified')])
-			return this.touch(key);
+		data = window.localStorage[this.key(key)].split(';', 2);
+
+		return data && data.length >= 2 ? new Date(parseInt(data[0])) : null;
+	},
+	
+	pruneNullValues: function() {
+		for (var key in window.localStorage)
+			if (this.inNamespace(key) && this.isNull(key))
+				window.localStorage.removeItem(key);
+	},
+	
+	connect: function(key, callback) {
+		if (this.listeners[key])
+			this.listeners[key].push(callback);
+		else
+			this.listeners[key] = [callback];
+	},
+	
+	disconnect: function(key, callback) {
+		if (typeof this.listeners[key] === 'undefined')
+			return;
 		
-		return new Date(localStorage[this.key(key, '__lastModified')]);
+		this.listeners[key] = this.listeners[key].filter(function(listener) {
+			return listener != callback;
+		});
+	},
+	
+	emit: function(key, value) {
+		var listeners = this.listeners[key] || [];
+		
+		for (var i = 0; i < listeners.length; ++i)
+			try {
+				listeners[i](value, key);
+			} catch(e) {
+				console.log('Exception from listener for ' + key, e);
+			}
 	},
 
 	markDirty: function() {
-		
+		this.isDirty = true;
 	},
 
 	synchronize: function(forceCompleteSync) {
-		var syncLock = localStorage[this.key(this.namespace, '__sync_lock')];
+		var syncLock = window.localStorage[this.key('__sync_lock')];
 		
-		if(syncLock && new Date() - new Date(syncLock) < 1000)
+		if (syncLock && new Date() - new Date(syncLock) < 5000)
 			return false;
 		
 		var self = this;
 		
 		var lock = function() {
-			localStorage[self.key(self.namespace, '__sync_lock')] = new Date();
+			window.localStorage[self.key('__sync_lock')] = new Date();
 		}
 		
 		var unlock = function() {
-			localStorage[self.key(self.namespace, '__sync_lock')] = false;
+			window.localStorage.removeItem(self.key('__sync_lock'));
 		}
 		
 		var markUpdated = function() {
-			localStorage[self.key(self.namespace, '__last_sync')] = new Date();
+			window.localStorage[self.key('__last_sync')] = new Date();
 		}
 		
 		lock();
 		
-		var lastSync = !forceCompleteSync && localStorage[this.key(this.namespace, '__last_sync')]
-			? new Date(localStorage[this.key(this.namespace, '__last_sync')])
+		var lastSync = !forceCompleteSync && window.localStorage[this.key('__last_sync')]
+			? new Date(window.localStorage[this.key('__last_sync')])
 			: null;
 		
 		var pairsToSync = [];
 	
-		for(var key in localStorage) {
-			if(!this.inNamespace(key) || this.isHidden(key))
+		for (var key in localStorage) {
+			console.log("Evaluating", key, this.inNamespace(key), this.isHidden(this.localKey(key)), this.lastModified(this.localKey(key)), lastSync);
+		
+			if (!this.inNamespace(key))
 				continue;
-			if(this.lastModified(key) > lastSync)
+			
+			var localKey = this.localKey(key);
+			
+			if (this.isHidden(localKey))
+				continue;
+			
+			if (this.lastModified(localKey) > lastSync)
 				pairsToSync.push({
 					k: key,
-					v: localStorage[key],
-					m: this.lastModified(key)
+					v: this.get(localKey),
+					m: this.lastModified(localKey)
 				});
 		}
 		
@@ -169,7 +234,7 @@ Storage.prototype = {
 		var request = new XMLHttpRequest();
 		request.open(method, apiUrl, true);
 		
-		if(method == 'POST')
+		if (method == 'POST')
 			request.setRequestHeader('Content-Type', 'application/json');
 		
 		request.onload = function() {
@@ -180,11 +245,12 @@ Storage.prototype = {
 				var pairsToUpdate = JSON.parse(request.responseText);
 				
 				pairsToUpdate.forEach(function(pair) {
-					localStorage[pair.k] = pair.v;
-					localStorage[pair.k + '.__lastModified'] = pair.m;
+					self.set(pair.k, pair.v, pair.m);
 				});
+				
+				self.pruneNullValues();
 			}
-			catch(e) {
+			catch (e) {
 				console.log('sync read failed', e);
 			}
 			finally {
