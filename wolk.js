@@ -46,10 +46,15 @@ Storage.prototype = {
 		}
 	},
 	
-	set: function(key, value, timestamp) {
-		window.localStorage[this.key(key)] = [timestamp || this.timestamp(), this.encode(value)].join(';');
+	set: function(key, value) {
+		this.__set(this.key(key), value, this.timestamp());
 		this.emit(key, value);
 		this.markDirty();
+	},
+	
+	__set: function(key, value, timestamp) {
+		console.log('__set', key, value, timestamp.getTime());
+		window.localStorage[key] = [timestamp.getTime(), this.encode(value)].join(';');
 	},
 	
 	remove: function(key) {
@@ -73,13 +78,13 @@ Storage.prototype = {
 			return null;
 		
 		data = window.localStorage[this.key(key)].split(';', 2);
-
-		return data && data.length >= 2 ? new Date(parseInt(data[0])) : null;
+		console.log(data[0], data && data.length == 2);
+		return data && data.length == 2 ? new Date(parseInt(data[0])) : null;
 	},
 	
 	pruneNullValues: function() {
 		for (var key in window.localStorage)
-			if (this.inNamespace(key) && this.isNull(key))
+			if (this.inNamespace(key) && !this.isHidden(key) && this.isNull(this.localKey(key)))
 				window.localStorage.removeItem(key);
 	},
 	
@@ -218,8 +223,10 @@ Storage.prototype = {
 				var pairsToUpdate = JSON.parse(request.responseText);
 				
 				pairsToUpdate.forEach(function(pair) {
-					self.set(pair.k, pair.v, pair.m);
+					self.__set(pair.k, pair.v, new Date(pair.m));
 				});
+				
+				markUpdated();
 				
 				self.pruneNullValues();
 			}
@@ -227,7 +234,6 @@ Storage.prototype = {
 				console.log('sync read failed', e);
 			}
 			finally {
-				markUpdated();
 				unlock();
 			}
 		}
