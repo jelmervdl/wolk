@@ -30,32 +30,32 @@ var _sync = function() {
 }
 
 var _fill_table = function(table) {
-    var data = x.find();
-    
-    for (var key in data)
-    {
-        var td_key = document.createElement('td');
-            td_key.appendChild(document.createTextNode(key));
-        var input_value = document.createElement('input');
-            input_value.type = 'text';
-            input_value.value = data[key];
-        var td_value = document.createElement('td');
-            td_value.appendChild(input_value);
-        
-        x.connect(key, function(value) {
-            this.value = value;
-        }.bind(input_value));
-        
-        input_value.addEventListener('change', (function(key) {
-            x.set(key, this.value);
-        }).bind(input_value, key), false);
-        
-        var tr = document.createElement('tr');
-            tr.appendChild(td_key);
-            tr.appendChild(td_value);
-        
-        table.appendChild(tr);
-    }
+	var data = x.find();
+	
+	for (var key in data)
+	{
+		var td_key = document.createElement('td');
+			td_key.appendChild(document.createTextNode(key));
+		var input_value = document.createElement('input');
+			input_value.type = 'text';
+			input_value.value = data[key];
+		var td_value = document.createElement('td');
+			td_value.appendChild(input_value);
+		
+		x.connect(key, function(value) {
+			this.value = value;
+		}.bind(input_value));
+		
+		input_value.addEventListener('change', (function(key) {
+			x.set(key, this.value);
+		}).bind(input_value, key), false);
+		
+		var tr = document.createElement('tr');
+			tr.appendChild(td_key);
+			tr.appendChild(td_value);
+		
+		table.appendChild(tr);
+	}
 }
 
 window.onload = _load;
