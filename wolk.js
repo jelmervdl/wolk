@@ -3,8 +3,7 @@ var Storage = function(namespace) {
 	this.isDirty = false;
 	this.listeners = {};
 	
-	var self = this;
-	window.addEventListener('storage', self.storageEvent, false);
+	window.addEventListener('storage', this.storageEvent.bind(this), false);
 }
 
 Storage.prototype = {
@@ -39,9 +38,12 @@ Storage.prototype = {
 		if (!this.exists(key))
 			return null;
 		
-		data = window.localStorage[this.key(key)].split(';', 2);
-		
-		return data && data.length >= 2 ? this.decode(data[1]) : null;
+		try {
+			data = window.localStorage[this.key(key)].split(';', 2);
+			return data && data.length >= 2 ? this.decode(data[1]) : null;
+		} catch (e) {
+			return null;
+		}
 	},
 	
 	set: function(key, value, timestamp) {
@@ -81,6 +83,23 @@ Storage.prototype = {
 				window.localStorage.removeItem(key);
 	},
 	
+	find: function(prefix) {
+		var hits = {}
+		
+		for (var key in window.localStorage)
+		{
+			if (!this.inNamespace(key) || this.isHidden(key))
+				continue;
+			
+			var local_key = this.localKey(key);
+			
+			if (!prefix || local_key.substring(0, prefix.length) != prefix)
+				hits[local_key] = this.get(local_key)
+		}
+		
+		return hits;
+	},
+	
 	connect: function(key, callback) {
 		if (this.listeners[key])
 			this.listeners[key].push(callback);
@@ -110,6 +129,15 @@ Storage.prototype = {
 
 	markDirty: function() {
 		this.isDirty = true;
+	},
+	
+	storageEvent: function(e)
+	{
+		if (this.inNamespace(e.key))
+		{
+			var local_key = this.localKey(e.key);
+			this.emit(local_key, this.get(local_key));
+		}
 	},
 
 	synchronize: function(forceCompleteSync) {

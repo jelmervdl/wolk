@@ -14,6 +14,8 @@ var _api_url = function() {
 var _load = function() {
 	document.getElementById('api_key').value = localStorage['__api_key'] || '';
 	document.getElementById('api_url').value = localStorage['__api_url'] || document.location.href.replace('test.html', 'sync.php');
+	
+	_fill_table(document.getElementById('pairs'));
 }
 
 var _apply = function() {
@@ -24,6 +26,35 @@ var _apply = function() {
 var _sync = function() {
 	var forceComplete = document.getElementById('force_complete').checked;
 	console.log(forceComplete, x.synchronize(forceComplete));
+}
+
+var _fill_table = function(table) {
+    var data = x.find();
+    
+    for (var key in data)
+    {
+        var td_key = document.createElement('td');
+            td_key.appendChild(document.createTextNode(key));
+        var input_value = document.createElement('input');
+            input_value.type = 'text';
+            input_value.value = data[key];
+        var td_value = document.createElement('td');
+            td_value.appendChild(input_value);
+        
+        x.connect(key, function(value) {
+            this.value = value;
+        }.bind(input_value));
+        
+        input_value.addEventListener('change', (function(key) {
+            x.set(key, this.value);
+        }).bind(input_value, key), false);
+        
+        var tr = document.createElement('tr');
+            tr.appendChild(td_key);
+            tr.appendChild(td_value);
+        
+        table.appendChild(tr);
+    }
 }
 
 window.onload = _load;
@@ -67,4 +98,5 @@ window.onload = _load;
 		<input type="checkbox" id="force_complete">
 		<label for="force_complete">Force Complete Sync</label>
 	</fieldset>
+	<table id="pairs"></table>
 </section>
