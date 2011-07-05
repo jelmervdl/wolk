@@ -60,6 +60,15 @@ var Storage = function(namespace) {
 	this.namespace = namespace;
 	this.isDirty = false;
 	this.listeners = {};
+	
+	var self = this;
+	window.addEventListener(
+		'storage',
+		function(e) {
+			if (this.inNamespace(e.key))
+				this.emit(e.key, e.newValue);
+		},
+		false);
 }
 
 Storage.prototype = {
