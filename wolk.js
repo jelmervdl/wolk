@@ -222,6 +222,7 @@ Storage.prototype = {
 				
 				pairsToUpdate.forEach(function(pair) {
 					self.__set(pair.k, pair.v, new Date(pair.m));
+					self.emit(self.localKey(pair.k), pair.v);
 				});
 				
 				markUpdated();
