@@ -30,10 +30,6 @@ Storage.prototype = {
 	
 	decode: JSON.parse,
 	
-	timestamp: function() {
-		return new Date().getTime();
-	},
-	
 	get: function(key) {
 		if (!this.exists(key))
 			return null;
@@ -47,7 +43,7 @@ Storage.prototype = {
 	},
 	
 	set: function(key, value) {
-		this.__set(this.key(key), value, this.timestamp());
+		this.__set(this.key(key), value, new Date());
 		this.emit(key, value);
 		this.markDirty();
 	},
@@ -125,11 +121,13 @@ Storage.prototype = {
 		var listeners = this.listeners[key] || [];
 		
 		for (var i = 0; i < listeners.length; ++i)
+		{
 			try {
 				listeners[i](value, key);
 			} catch(e) {
 				console.log('Exception from listener for ' + key, e);
 			}
+		}
 	},
 
 	markDirty: function() {
