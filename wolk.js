@@ -94,6 +94,9 @@ Storage.prototype = {
 			
 			var local_key = this.localKey(key);
 			
+			if (this.isNull(local_key))
+				continue;
+			
 			if (!prefix || local_key.substring(0, prefix.length) != prefix)
 				hits[local_key] = this.get(local_key)
 		}
