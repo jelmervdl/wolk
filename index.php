@@ -274,7 +274,7 @@ function index_data()
 					<tr>
 						<td><input type="checkbox" name="keys[]" value="'.htmlspecialchars($pair->key, ENT_QUOTES, 'utf-8').'"></td>
 						<td>'.htmlspecialchars($pair->key, ENT_COMPAT, 'utf-8').'</td>
-						<td>'.htmlspecialchars($pair->value, ENT_COMPAT, 'utf-8').'</td>
+						<td>'.(is_null($pair->value) ? '<span class="deleted">deleted</span>' : htmlspecialchars($pair->value, ENT_COMPAT, 'utf-8')).'</td>
 						<td>'.$pair->last_modified_on->format('d-m-Y H:i:s').'</td>
 					</tr>
 			';
@@ -299,6 +299,10 @@ function index_header()
 		<style>
 			.selected {
 				color: red;
+			}
+			.deleted {
+				color: red;
+				font-style: italic;
 			}
 		</style>
 	</head>

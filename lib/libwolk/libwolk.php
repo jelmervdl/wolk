@@ -505,6 +505,27 @@ function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = 
 
 function wolk_api_write($user_id, $origin_id, array $data)
 {
+	/*
+	$null_pairs = array();
+	$non_null_pairs = array();
+	
+	foreach ($data as $pair)
+	{
+		if ($pair->v === null)
+			$null_pairs[] = $pair;
+		else
+			$non_null_pairs[] = $pair;
+	}
+	
+	return _wolk_api_delete_pairs($user_id, $origin_id, $null_pairs)
+		+ _wolk_api_save_pairs($user_id, $origin_id, $non_null_pairs);
+	*/
+	
+	return _wolk_api_save_pairs($user_id, $origin_id, $data);
+}
+
+function _wolk_api_save_pairs($user_id, $origin_id, array $data)
+{
 	global $_wolk_db;
 	
 	$stmt = $_wolk_db->prepare("
@@ -524,12 +545,41 @@ function wolk_api_write($user_id, $origin_id, array $data)
 	
 	$n = 0;
 	
-	foreach($data as $pair) {
+	foreach ($data as $pair) {
 		$key = $pair->k;
 		$value = $pair->v;
 		$last_modified_on = wolk_api_date_to_sql($pair->m);
 		$stmt->execute();
 		$n += ($stmt->rowCount() > 0); // because it's always 0 or 2? Weird.
+	}
+	
+	return $n;
+}
+
+function _wolk_api_delete_pairs($user_id, $origin_id, array $data)
+{
+	global $_wolk_db;
+	
+	$stmt = $_wolk_db->prepare("
+		DELETE FROM pairs WHERE
+			pair_key = :key
+			AND origin_id = :origin_id
+			AND user_id = :user_id
+			AND last_modified_on < :last_modified_on");
+	
+	$stmt->bindParam(':origin_id', $origin_id, PDO::PARAM_INT);
+	$stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+	
+	$stmt->bindParam(':key', $key, PDO::PARAM_STR);
+	$stmt->bindParam(':last_modified_on', $last_modified_on, PDO::PARAM_STR);
+	
+	$n = 0;
+	
+	foreach ($data as $pair) {
+		$key = $pair->k;
+		$last_modified_on = wolk_api_date_to_sql($pair->m);
+		$stmt->execute();
+		$n += ($stmt->rowCount() > 0);
 	}
 	
 	return $n;

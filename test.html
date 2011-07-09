@@ -54,7 +54,7 @@ var _fill_table = function() {
 		
 		x.connect(key, function(key, value) {
 			if (x.isNull(key))
-				table.removeChild(tr);
+				table.removeChild(this.parentNode.parentNode);
 			else
 				this.value = value;
 		}.bind(input_value, key));
