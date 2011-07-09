@@ -24,6 +24,17 @@ function json_date($timestamp)
 	return gmstrftime('%Y-%m-%dT%H:%M:%S.000Z', $timestamp);
 }
 
+function http_origin_hostname()
+{
+	if (!isset($_SERVER['HTTP_ORIGIN']))
+		return null;
+	
+	if (!preg_match('{^(?:[a-z]+://)?([^/]+)/?$}i', $_SERVER['HTTP_ORIGIN'], $match))
+		return null;
+	
+	return $match[1];
+}
+
 function _wolk_translate_conditions_to_sql(array $conditions)
 {
 	return implode(' AND ', array_pluck($conditions, 0));
@@ -100,13 +111,15 @@ function wolk_api_send_accept_headers()
 
 function wolk_api_origin()
 {
-	if(!isset($_SERVER['HTTP_ORIGIN']))
+	$origin = http_origin_hostname();
+	
+	if ($origin === null)
 		throw new Wolk_API_Exception('Missing Origin header', WOLK_EXCEPTION_MISSING_ORIGIN_HEADER);
 	
-	$origin_id = wolk_origin_id($_SERVER['HTTP_ORIGIN']);
+	$origin_id = wolk_origin_id($origin);
 	
-	if(!$origin_id)
-		$origin_id = wolk_origin_add($_SERVER['HTTP_ORIGIN']);
+	if (!$origin_id)
+		$origin_id = wolk_origin_add($origin);
 	
 	return (int) $origin_id;
 }
