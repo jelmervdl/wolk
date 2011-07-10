@@ -1,9 +1,23 @@
-var Storage = function(namespace) {
+var Storage = function(namespace, key, url) {
+	this.apiKey = key;
+	this.apiUrl = url;
+	
 	this.namespace = namespace;
+	
 	this.isDirty = false;
+	this.scheduledSync = null;
+	
 	this.listeners = {};
 	
-	window.addEventListener('storage', this.storageEvent.bind(this), false);
+	window.addEventListener('storage',
+		this.storageEvent.bind(this),
+		false);
+	
+	window.addEventListener('beforeunload',
+		(function() { if (this.isDirty) this.synchronize(); }).bind(this),
+		false);
+	
+	this.scheduleNextSynchronize(1000);
 }
 
 Storage.prototype = {
@@ -53,6 +67,14 @@ Storage.prototype = {
 		window.localStorage[key] = [timestamp.getTime(), this.encode(value)].join(';');
 	},
 	
+	__parseDate: function(datestring) {
+		var d;
+		if (d = datestring.match(/^(\d{4})[\/\.\-](\d{2})[\/\.\-](\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/))
+			return new Date(Date.UTC(d[1], d[2], d[3], d[4], d[5], d[6], d[7]));
+		else
+			return new Date(datestring); // lets hope Date can make soup out of it.
+	},
+	
 	remove: function(key) {
 		this.set(key, null);
 	},
@@ -74,7 +96,7 @@ Storage.prototype = {
 			return null;
 		
 		data = window.localStorage[this.key(key)].split(';', 2);
-		console.log(data[0], data && data.length == 2);
+		//console.log(data[0], data && data.length == 2);
 		return data && data.length == 2 ? new Date(parseInt(data[0])) : null;
 	},
 	
@@ -135,18 +157,32 @@ Storage.prototype = {
 
 	markDirty: function() {
 		this.isDirty = true;
+		this.scheduleNextSynchronize(200);
 	},
 	
-	storageEvent: function(e)
-	{
+	storageEvent: function(e) {
 		if (this.inNamespace(e.key))
 		{
 			var local_key = this.localKey(e.key);
 			this.emit(local_key, this.get(local_key));
 		}
 	},
+	
+	scheduleNextSynchronize: function(timeout) {
+		clearTimeout(this.scheduledSync);
+		this.scheduledSync = setTimeout(
+			this.runScheduledSynchronize.bind(this),
+			timeout);
+	},
+	
+	runScheduledSynchronize: function() {
+		this.synchronize(false, this.scheduleNextSynchronize.bind(this, 15000));
+	},
 
-	synchronize: function(forceCompleteSync) {
+	synchronize: function(forceCompleteSync, callback) {
+		if (!this.apiKey || !this.apiUrl)
+			return false;
+		
 		var syncLock = window.localStorage[this.key('__sync_lock')];
 		
 		if (syncLock && new Date() - new Date(syncLock) < 5000)
@@ -175,7 +211,7 @@ Storage.prototype = {
 		var pairsToSync = [];
 	
 		for (var key in localStorage) {
-			console.log("Evaluating", key, this.inNamespace(key), this.isHidden(this.localKey(key)), this.lastModified(this.localKey(key)), lastSync);
+			//console.log("Evaluating", key, this.inNamespace(key), this.isHidden(this.localKey(key)), this.lastModified(this.localKey(key)), lastSync);
 		
 			if (!this.inNamespace(key))
 				continue;
@@ -193,10 +229,10 @@ Storage.prototype = {
 				});
 		}
 		
-		var apiUrl = _api_url()
-			+ '?api_key=' + encodeURIComponent(_api_key())
+		var apiUrl = this.apiUrl
+			+ '?api_key=' + encodeURIComponent(this.apiKey)
 			+ (lastSync
-				? '&since=' + encodeURIComponent('@' + Math.floor(lastSync.getTime() / 1000))
+				? '&since=' + encodeURIComponent('@' + Math.floor(lastSync.getUTCTime() / 1000))
 				: '')
 			+ ('&' + [this.namespace].map(function(namespace) { // voor later
 						return 'namespaces[]='+encodeURIComponent(namespace);
@@ -224,7 +260,7 @@ Storage.prototype = {
 				var pairsToUpdate = JSON.parse(request.responseText);
 				
 				pairsToUpdate.forEach(function(pair) {
-					self.__set(pair.k, pair.v, new Date(pair.m));
+					self.__set(pair.k, pair.v, self.__parseDate(pair.m));
 					self.emit(self.localKey(pair.k), pair.v);
 				});
 				
@@ -237,11 +273,17 @@ Storage.prototype = {
 			}
 			finally {
 				unlock();
+				
+				if (callback)
+					callback();
 			}
 		}
 		
 		request.onerror = function() {
 			unlock();
+			
+			if (callback)
+				callback();
 		}
 		
 		request.send(data);

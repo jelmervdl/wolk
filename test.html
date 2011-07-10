@@ -13,15 +13,15 @@ var _api_url = function() {
 }
 
 var _load = function() {
-	document.getElementById('api_key').value = localStorage['__api_key'] || '';
-	document.getElementById('api_url').value = localStorage['__api_url'] || document.location.href.replace('test.html', 'sync.php');
+	x.apiKey = document.getElementById('api_key').value = localStorage['__api_key'] || '';
+	x.apiUrl = document.getElementById('api_url').value = localStorage['__api_url'] || document.location.href.replace('test.html', 'sync.php');
 	
 	_fill_table();
 }
 
 var _apply = function() {
-	localStorage['__api_key'] = document.getElementById('api_key').value;
-	localStorage['__api_url'] = document.getElementById('api_url').value;
+	x.apiKey = localStorage['__api_key'] = document.getElementById('api_key').value;
+	x.apiUrl = localStorage['__api_url'] = document.getElementById('api_url').value;
 }
 
 var _sync = function() {
@@ -52,12 +52,16 @@ var _fill_table = function() {
 		var td_delete = document.createElement('td');
 			td_delete.appendChild(btn_delete);
 		
-		x.connect(key, function(key, value) {
-			if (x.isNull(key))
+		var cb_delete = function(key, value) {
+			if (x.isNull(key)) {
 				table.removeChild(this.parentNode.parentNode);
+				x.disconnect(key, cb_delete);
+			}
 			else
 				this.value = value;
-		}.bind(input_value, key));
+		}.bind(input_value, key);
+		
+		x.connect(key, cb_delete);
 		
 		input_value.addEventListener('change', (function(key) {
 			x.set(key, this.value);
