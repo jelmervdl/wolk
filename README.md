@@ -25,7 +25,7 @@ Just copy `conf/db.php.default` to `conf/db.php` and provide your mysql credenti
 	mysql> connect wolk
 	mysql> source path/to/wolk.sql
 	mysql> CREATE USER 'wolk'@'localhost' IDENTIFIED BY 'wolk';
-	mysql> GRANT SELECT, INSERT, UPDATE ON wolk.* TO 'wolk'@'localhost';	
+	mysql> GRANT SELECT, INSERT, UPDATE, DELETE ON wolk.* TO 'wolk'@'localhost';	
 
 API
 ===
