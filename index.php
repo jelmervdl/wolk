@@ -155,11 +155,13 @@ function index_api_keys()
 		';
 		foreach($keys as $key) {
 			if($key->is_valid())
-				printf('<li><strong>%s</strong> <em>added on %s</em><button type="submit" name="revoke_key" value="%1$s">Revoke Key</button></li>', 
-					$key->key, $key->added_on->format('d-m-Y'));
+				printf('<li><strong>%s</strong> <em>added on <time timestamp="%s">%s</time></em><button type="submit" name="revoke_key" value="%1$s">Revoke Key</button></li>', 
+					$key->key, json_stringify_date($key->added_on), $key->added_on->format('d-m-Y'));
 			else
-				printf('<li><del><strong>%s</strong> <em>added on %s and revoked on %s</em></li>',
-					$key->key, $key->added_on->format('d-m-Y'), $key->revoked_on->format('d-m-Y'));
+				printf('<li><del><strong>%s</strong> <em>added on <time datetime="%s">%s</time> and revoked on <time datetime="%s">%s</time></em></li>',
+					$key->key,
+					json_stringify_date($key->added_on), $key->added_on->format('d-m-Y'),
+					json_stringify_date($key->revoked_on), $key->revoked_on->format('d-m-Y'));
 		}
 		echo '
 		</ol>
@@ -180,19 +182,15 @@ function index_api_keys()
 
 function index_events()
 {
-	echo '
-	<ol>
-	';
+	echo "\t<ol>\n";
 	foreach(wolk_list_events($_SESSION['user_id']) as $event) {
-		echo '<li>';
-		echo htmlspecialchars($event->message, ENT_COMPAT, 'utf-8');
-		if($event->api_key) echo ' using <em>' . $event->api_key . '</em>';
-		echo ' ' . _relative_date($event->created_on);
-		echo '</li>';
+		printf("\t\t<li>%s%s <time datetime=\"%s\">%s</time></li>\n",
+			htmlspecialchars($event->message, ENT_COMPAT, 'utf-8'),
+			$event->api_key ? ' using <em>' . $event->api_key . '</em>' : '',
+			json_stringify_date($event->created_on),
+			_relative_date($event->created_on));
 	}
-	echo '
-	</ol>
-	';
+	echo "\t</ol>\n";
 }
 
 function index_account()
@@ -247,7 +245,7 @@ function index_data()
 		echo '
 		<li class="'.($origin->id == $selected_origin ? 'selected' : '').'">
 			<a href="'.$self.'?page=data&origin='.urlencode($origin->id).'">' . htmlspecialchars($origin->origin, ENT_COMPAT, 'utf-8') . '</a>
-			<span class="last_updated timestamp">Last updated on ' . $origin->last_updated_on->format('d-m-Y H:i:s') . '</span>
+			<span class="last_updated timestamp">Last updated on <time datetime="' . json_stringify_date($origin->last_updated_on) . '">' . $origin->last_updated_on->format('d-m-Y H:i:s') . '</time></span>
 		</li>
 		';
 	}
@@ -275,7 +273,7 @@ function index_data()
 						<td><input type="checkbox" name="keys[]" value="'.htmlspecialchars($pair->key, ENT_QUOTES, 'utf-8').'"></td>
 						<td>'.htmlspecialchars($pair->key, ENT_COMPAT, 'utf-8').'</td>
 						<td>'.(is_null($pair->value) ? '<span class="deleted">deleted</span>' : htmlspecialchars($pair->value, ENT_COMPAT, 'utf-8')).'</td>
-						<td>'.$pair->last_modified_on->format('d-m-Y H:i:s').'</td>
+						<td><time timestamp="'.json_stringify_date($pair->last_modified_on).'">'.$pair->last_modified_on->format('d-m-Y H:i:s').'</time></td>
 					</tr>
 			';
 		}
