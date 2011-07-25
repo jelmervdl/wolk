@@ -640,7 +640,8 @@ function wolk_api_main($action)
 			
 				$changes = wolk_api_write($user_id, $origin_id, $data);
 				
-				wolk_add_event($user_id, $origin_id, "Synced $changes changes");
+				if ($changes > 0)
+					wolk_add_event($user_id, $origin_id, "Synced $changes changes");
 				
 				// Note that POST will also execute the GET part. This is by design!
 			case 'GET':
