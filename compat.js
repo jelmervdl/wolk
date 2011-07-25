@@ -104,3 +104,10 @@ if (!Function.prototype.bind) {
 		return bound;
 	};
 }
+
+// Safari 5.1 is missing getUTCTime? This should be mostly equal
+if (!Date.prototype.getUTCTime) {
+	Date.prototype.getUTCTime = function() {
+		return this.getTime() + this.getTimezoneOffset() * 60;
+	}
+}

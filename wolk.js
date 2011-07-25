@@ -70,7 +70,7 @@ Storage.prototype = {
 	__parseDate: function(datestring) {
 		var d;
 		if (d = datestring.match(/^(\d{4})[\/\.\-](\d{2})[\/\.\-](\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/))
-			return new Date(Date.UTC(d[1], d[2], d[3], d[4], d[5], d[6], d[7]));
+			return new Date(Date.UTC(d[1], d[2] - 1, d[3], d[4], d[5], d[6], d[7]));
 		else
 			return new Date(datestring); // lets hope Date can make soup out of it.
 	},

@@ -19,9 +19,16 @@ function array_pluck($array, $index)
 	return $hits;
 }
 
-function json_date($timestamp)
+function json_stringify_date(DateTime $timestamp)
 {
-	return gmstrftime('%Y-%m-%dT%H:%M:%S.000Z', $timestamp);
+	$utc_timestamp = clone $timestamp;
+	$utc_timestamp->setTimeZone(new DateTimeZone('UTC'));
+	return $utc_timestamp->format('Y-m-d\TH:i:s.000\Z');
+}
+
+function json_parse_date($datestring)
+{
+	return new DateTime($datestring, new DateTimeZone('UTC'));
 }
 
 function http_origin_hostname()
@@ -67,15 +74,19 @@ function _wolk_insert_data_into_object(array $data, $object, array $map = array(
 
 function _wolk_date_create($date = null)
 {
+	global $_wolk_db_timezone;
+	
 	return $date
-		? new DateTime($date)
+		? new DateTime($date, $_wolk_db_timezone)
 		: null;
 }
 
-function wolk_set_database(PDO $pdo)
+function wolk_set_database(PDO $pdo, DateTimeZone $timezone)
 {
-	global $_wolk_db;
+	global $_wolk_db, $_wolk_db_timezone;
+	
 	$_wolk_db = $pdo;
+	$_wolk_db_timezone = $timezone;
 }
 
 function wolk_origin_id($origin)
@@ -257,7 +268,7 @@ class Wolk_ApiKey
 	{
 		$key = new self();
 		$key->key = md5(uniqid());
-		$key->added_on = new DateTime();
+		$key->added_on = new DateTime('now', new DateTimeZone('UTC'));
 		return $key;
 	}
 	
@@ -311,7 +322,7 @@ class Wolk_Origin
 	}
 }
 
-function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since = null)
+function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, DateTime $since = null)
 {
 	global $_wolk_db;
 	
@@ -328,7 +339,7 @@ function wolk_list_pairs($user_id, $origin_id, array $namespaces = null, $since 
 	}
 	
 	if($since) {
-		$datetime = date('Y-m-d H:i:s', strtotime($since));
+		$datetime = $since->format('Y-m-d H:i:s');
 		$conditions[] = array('last_modified_on > :since', ':since' => $datetime);
 	}
 	
@@ -488,7 +499,7 @@ class Wolk_Event
 
 function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = null)
 {
-	$pairs = wolk_list_pairs($user_id, $origin_id, $namespaces, $since);
+	$pairs = wolk_list_pairs($user_id, $origin_id, $namespaces, json_parse_date($since));
 	
 	$response = array();
 	
@@ -496,7 +507,7 @@ function wolk_api_read($user_id, $origin_id, array $namespaces = null, $since = 
 		$response[] = array(
 			'k' => $pair->key,
 			'v' => $pair->value,
-			'm' => json_date($pair->last_modified_on->getTimestamp())
+			'm' => json_stringify_date($pair->last_modified_on)
 		);
 	}
 	
@@ -548,7 +559,7 @@ function _wolk_api_save_pairs($user_id, $origin_id, array $data)
 	foreach ($data as $pair) {
 		$key = $pair->k;
 		$value = $pair->v;
-		$last_modified_on = wolk_api_date_to_sql($pair->m);
+		$last_modified_on = wolk_api_date_to_sql(json_parse_date($pair->m));
 		$stmt->execute();
 		$n += ($stmt->rowCount() > 0); // because it's always 0 or 2? Weird.
 	}
@@ -571,13 +582,15 @@ function _wolk_api_delete_pairs($user_id, $origin_id, array $data)
 	$stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
 	
 	$stmt->bindParam(':key', $key, PDO::PARAM_STR);
+	
+	// XXX $last_modified_on is not passed
 	$stmt->bindParam(':last_modified_on', $last_modified_on, PDO::PARAM_STR);
 	
 	$n = 0;
 	
 	foreach ($data as $pair) {
 		$key = $pair->k;
-		$last_modified_on = wolk_api_date_to_sql($pair->m);
+		$last_modified_on = wolk_api_date_to_sql(json_parse_date($pair->m));
 		$stmt->execute();
 		$n += ($stmt->rowCount() > 0);
 	}
@@ -585,10 +598,13 @@ function _wolk_api_delete_pairs($user_id, $origin_id, array $data)
 	return $n;
 }
 
-function wolk_api_date_to_sql($json_date)
+function wolk_api_date_to_sql(DateTime $timestamp)
 {
-	$result = date('Y-m-d H:i:s', strtotime($json_date));
-	return $result;
+	global $_wolk_db_timezone;
+	
+	$utc_timestamp = clone $timestamp;
+	$utc_timestamp->setTimeZone($_wolk_db_timezone);
+	return $utc_timestamp->format('Y-m-d H:i:s');
 }
 
 class Wolk_API_Exception extends Exception {}

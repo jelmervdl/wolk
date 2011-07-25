@@ -47,6 +47,8 @@ var _fill_table = function() {
 			input_value.value = data[key];
 		var td_value = document.createElement('td');
 			td_value.appendChild(input_value);
+		var td_last_modified = document.createElement('td');
+			td_last_modified.appendChild(document.createTextNode(x.lastModified(key)));
 		var btn_delete = document.createElement('button');
 			btn_delete.appendChild(document.createTextNode('delete'));
 		var td_delete = document.createElement('td');
@@ -54,12 +56,14 @@ var _fill_table = function() {
 		
 		var cb_delete = function(key, value) {
 			if (x.isNull(key)) {
-				table.removeChild(this.parentNode.parentNode);
+				table.removeChild(this.value.parentNode.parentNode);
 				x.disconnect(key, cb_delete);
 			}
-			else
-				this.value = value;
-		}.bind(input_value, key);
+			else {
+				this.value.value = value;
+				this.last_modified.innerHTML = x.lastModified(key);
+			}	
+		}.bind({'value': input_value, 'last_modified': td_last_modified}, key);
 		
 		x.connect(key, cb_delete);
 		
@@ -73,6 +77,7 @@ var _fill_table = function() {
 		
 		tr.appendChild(td_key);
 		tr.appendChild(td_value);
+		tr.appendChild(td_last_modified);
 		tr.appendChild(td_delete);
 		
 		table.appendChild(tr);
@@ -142,6 +147,7 @@ window.onload = _load;
 				<tr>
 					<th>Key</th>
 					<th>Value</th>
+					<th>Last modified</th>
 					<th>Actions</th>
 				</tr>
 			</thead>
@@ -150,6 +156,7 @@ window.onload = _load;
 				<tr>
 					<td><input type="text" id="new_pair_key"></td>
 					<td><input type="text" id="new_pair_value"></td>
+					<td></td>
 					<td><button onclick="_add_pair()">Set</button></td>
 				</tr>
 			</tfoot>
